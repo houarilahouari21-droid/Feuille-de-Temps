@@ -1,0 +1,6 @@
+{
+  "name": "Feuille de Temps",
+  "description": "Suivi des heures de travail et gestion des chantiers avec banque d'heures supplémentaires, exports PDF/Excel et protection par mot de passe.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
