@@ -95,6 +95,47 @@ export const exportToExcel = (
   XLSX.writeFile(wb, filename);
 };
 
+const drawEmbossedCard = (
+  doc: jsPDF, 
+  x: number, 
+  y: number, 
+  w: number, 
+  h: number, 
+  accentColor: [number, number, number] = [79, 70, 229]
+): void => {
+  // 1. Double soft 3D backdrop drop shadow
+  doc.setFillColor(241, 245, 249); // slate-100 outer glow
+  doc.roundedRect(x + 2.5, y + 2.5, w, h, 4, 4, 'F');
+  doc.setFillColor(226, 232, 240); // slate-200 shadow core
+  doc.roundedRect(x + 1.2, y + 1.2, w, h, 4, 4, 'F');
+
+  // 2. High density solid core background
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(x, y, w, h, 4, 4, 'F');
+
+  // 3. Beveled highlights (Embossed look)
+  // Inside Top & Left: light specular outline to appear raised
+  doc.setDrawColor(248, 250, 252); // slate-50 bright highlight
+  doc.setLineWidth(1.25);
+  doc.line(x + 2, y + 1.2, x + w - 2, y + 1.2); // top bevel line
+  doc.line(x + 1.2, y + 2, x + 1.2, y + h - 2); // left bevel line
+
+  // Inside Right & Bottom: solid physical shadow line to appear extruded
+  doc.setDrawColor(195, 207, 220); // slightly darker than slate-200 core
+  doc.setLineWidth(0.85);
+  doc.line(x + w, y + 2, x + w, y + h - 2); // right shadow line
+  doc.line(x + 2, y + h, x + w - 2, y + h); // bottom shadow line
+
+  // 4. Accent stripe on the left limit
+  doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+  doc.rect(x + 0.5, y + 0.5, 4, h - 1, 'F');
+
+  // 5. Hard crisp outer frame
+  doc.setDrawColor(148, 163, 184); // slate-400
+  doc.setLineWidth(0.75);
+  doc.roundedRect(x, y, w, h, 4, 4, 'D');
+};
+
 export const exportToPdf = (
   data: TimesheetData,
   summary: {
@@ -111,15 +152,32 @@ export const exportToPdf = (
   const width = doc.internal.pageSize.getWidth();
   const height = doc.internal.pageSize.getHeight();
 
-  // Banner
-  doc.setFillColor(79, 70, 229); // Indigo background
-  doc.rect(0, 0, width, 45, 'F');
+  // Beautiful modern web banner with top purple accent line and realistic multi-layered drop shadow
+  const bannerHeight = 48;
+  doc.setFillColor(79, 70, 229); // Indigo/Purple accent bar
+  doc.rect(0, 0, width, bannerHeight, 'F');
+  
+  doc.setFillColor(124, 58, 237); // Light Violet highlight line
+  doc.rect(0, bannerHeight - 3, width, 3, 'F');
+
+  // Glassy white reflection highlight at the very top edge of the banner
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, width, 1.5, 'F');
+
+  // Crisp multi-layered 3D shadow underneath the master header banner
+  doc.setFillColor(241, 245, 249);
+  doc.rect(0, bannerHeight, width, 4, 'F');
+  doc.setFillColor(226, 232, 240);
+  doc.rect(0, bannerHeight, width, 2, 'F');
+  doc.setFillColor(203, 213, 225);
+  doc.rect(0, bannerHeight, width, 0.75, 'F');
+  
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(255, 255, 255);
-  doc.text(`RÉSUMÉ HEBDOMADAIRE : Semaine du ${data.meta.dateDebut} au ${data.meta.dateFin}`, width / 2, 27, { align: 'center' });
+  doc.text(`RÉSUMÉ HEBDOMADAIRE : Semaine du ${data.meta.dateDebut} au ${data.meta.dateFin}`, width / 2, 26, { align: 'center' });
 
-  const finalY = 65;
+  const finalY = 68;
 
   // Build grid data
   const chantiersSummary: Record<string, any> = {};
@@ -174,26 +232,29 @@ export const exportToPdf = (
       theme: 'striped',
       styles: {
         font: 'helvetica',
-        fontSize: 8.5,
-        cellPadding: 6,
-        lineColor: [226, 232, 240], // slate-200
-        lineWidth: 0.5,
+        fontSize: 9, // Slightly larger for excellent readability
+        cellPadding: 7, // Spacious web-like vertical padding
+        lineColor: [203, 213, 225], // crisp slate-300 borders instead of light gray
+        lineWidth: 0.75, // more defined, clean lines
+        textColor: [15, 23, 42], // Deep high-contrast Slate-900 text for superior clarity
       },
       headStyles: { 
-        fillColor: [79, 70, 229], // Slate Indigo
+        fillColor: [79, 70, 229], // Rich Indigo head
         textColor: 255, 
         fontStyle: 'bold',
+        fontSize: 9.5,
         halign: 'center'
       },
       footStyles: { 
-        fillColor: [241, 245, 249], // Soft gray table footer
-        textColor: [15, 23, 42],    // Slate-900
+        fillColor: [241, 245, 249], // soft slate-100 footer
+        textColor: [15, 23, 42],    // Slate-900 bold
         fontStyle: 'bold',
+        fontSize: 9.5,
         halign: 'center'
       },
       columnStyles: {
-        0: { fontStyle: 'bold', halign: 'left' },
-        1: { halign: 'left' },
+        0: { fontStyle: 'bold', halign: 'left', textColor: [15, 23, 42] },
+        1: { halign: 'left', textColor: [51, 65, 85] },
         2: { halign: 'center' },
         3: { halign: 'center' },
         4: { halign: 'center' },
@@ -204,29 +265,32 @@ export const exportToPdf = (
         9: { fontStyle: 'bold', halign: 'center' }
       },
       didParseCell: (e: any) => {
-        // Enforce horizontal centering for columns 2 through 9 across all sections (head/body/foot)
+        // Center columns 2 through 9
         if (e.column.index >= 2 && e.column.index <= 9) {
           e.cell.styles.halign = 'center';
         }
 
         if (e.section === 'body') {
-          // Alternating row styling
+          // Alternative rows for beautiful spreadsheet effect
           if (e.row.index % 2 === 0) {
             e.cell.styles.fillColor = [255, 255, 255];
           } else {
-            e.cell.styles.fillColor = [248, 250, 252]; // Soft slate-50 background like raw web pages
+            e.cell.styles.fillColor = [248, 250, 252]; // tailwind slate-50 background
           }
 
-          // Quiet/Mute empty dashes so active working entries stand out
+          // Mute empty work cells to keep the focus on active ones
           if (e.cell.raw === '-') {
-            e.cell.styles.textColor = [164, 174, 191]; // Slate-400 equivalent for softer look
+            e.cell.styles.textColor = [148, 163, 184]; // Muted Slate-400
             e.cell.styles.fontStyle = 'normal';
+          } else if (e.column.index >= 2 && e.column.index <= 8) {
+            e.cell.styles.fontStyle = 'bold'; // Active hours bold for clarity
+            e.cell.styles.textColor = [15, 23, 42];
           }
 
-          // Highlight total column
+          // Total column styling
           if (e.column.index === 9) {
-            e.cell.styles.fillColor = [238, 242, 255]; // Soft Indigo tint (Indigo-50)
-            e.cell.styles.textColor = [67, 56, 202];   // Dark Indigo text
+            e.cell.styles.fillColor = [238, 242, 255]; // Light Indigo-50 tint
+            e.cell.styles.textColor = [67, 56, 202];   // Indigo-700
             e.cell.styles.fontStyle = 'bold';
           }
         } else if (e.section === 'foot') {
@@ -237,6 +301,29 @@ export const exportToPdf = (
             e.cell.styles.fillColor = [224, 231, 255]; // Indigo-100 grand total box
             e.cell.styles.textColor = [67, 56, 202];   // Indigo-700
           }
+        }
+      },
+      didDrawCell: (e: any) => {
+        // Gorgeous 3D embossed relief for the header cells
+        if (e.section === 'head') {
+          // Inner light bevel highlight at the top of headers
+          doc.setDrawColor(255, 255, 255, 0.45);
+          doc.setLineWidth(0.8);
+          doc.line(e.cell.x, e.cell.y + 0.8, e.cell.x + e.cell.width, e.cell.y + 0.8);
+          
+          // Solid physical drop line shadow at the bottom boundary of headers
+          doc.setDrawColor(30, 41, 59, 0.55);
+          doc.setLineWidth(1.2);
+          doc.line(e.cell.x, e.cell.y + e.cell.height - 0.6, e.cell.x + e.cell.width, e.cell.y + e.cell.height - 0.6);
+        } else if (e.section === 'foot') {
+          // Dual borders for footer cell separation relief
+          doc.setDrawColor(71, 85, 105, 0.35);
+          doc.setLineWidth(1.25);
+          doc.line(e.cell.x, e.cell.y, e.cell.x + e.cell.width, e.cell.y);
+          
+          doc.setDrawColor(255, 255, 255);
+          doc.setLineWidth(1.0);
+          doc.line(e.cell.x, e.cell.y + 1.2, e.cell.x + e.cell.width, e.cell.y + 1.2);
         }
       }
     });
@@ -269,22 +356,16 @@ export const exportToPdf = (
   stats.forEach((stat, idx) => {
     const sx = startX + idx * (cardW + cardGap);
     
-    // Smooth container box
-    doc.setFillColor(248, 250, 252); // slate-50
-    doc.setDrawColor(226, 232, 240); // slate-200
-    doc.roundedRect(sx, footerY, cardW, cardH, 4, 4, 'FD');
-    
-    // Left decorative brand bar like modern web dashboards
-    doc.setFillColor(stat.color[0], stat.color[1], stat.color[2]);
-    doc.rect(sx, footerY, 4, cardH, 'F');
+    // Beautiful 3D Embossed Card wrapper
+    drawEmbossedCard(doc, sx, footerY, cardW, cardH, stat.color as [number, number, number]);
     
     // Label text
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139); // slate-500
-    doc.text(stat.title, sx + 14, footerY + 16);
+    doc.setTextColor(71, 85, 105); // slate-600
+    doc.text(stat.title, sx + 14, footerY + 17);
     
-    // Stat val
+    // Stat value
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42); // slate-900
@@ -324,13 +405,25 @@ export const exportMultiWeekToPdf = (
   const startPeriod = sortedWeeks[0].data.meta.dateDebut;
   const endPeriod = sortedWeeks[sortedWeeks.length - 1].data.meta.dateFin;
 
-  // Let's draw a beautiful global master header banner at the top of Page 1
-  const mainHeaderHeight = 55;
-  doc.setFillColor(79, 70, 229); // Indigo background
+  // Let's draw a beautiful global master header banner at the top of Page 1 with drop shadow
+  const mainHeaderHeight = 52;
+  doc.setFillColor(79, 70, 229); // Royal Indigo background
   doc.rect(0, 0, width, mainHeaderHeight, 'F');
   
-  doc.setFillColor(124, 58, 237); // Purple accent border
+  doc.setFillColor(124, 58, 237); // Purple accent border highlight
   doc.rect(0, mainHeaderHeight - 3, width, 3, 'F');
+
+  // Glassy white highlight line at the very top edge
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, width, 1.5, 'F');
+
+  // Shadow below the global header banner with feather layers
+  doc.setFillColor(241, 245, 249);
+  doc.rect(0, mainHeaderHeight, width, 4, 'F');
+  doc.setFillColor(226, 232, 240);
+  doc.rect(0, mainHeaderHeight, width, 2, 'F');
+  doc.setFillColor(203, 213, 225);
+  doc.rect(0, mainHeaderHeight, width, 0.75, 'F');
   
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
@@ -350,18 +443,21 @@ export const exportMultiWeekToPdf = (
     globalOvertimeHours += w.summary.heuresSupplementaires;
   });
 
-  // Display a beautiful compact global synthesis box
-  doc.setFillColor(248, 250, 252); // extremely soft slate
-  doc.rect(40, mainHeaderHeight + 10, width - 80, 24, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.rect(40, mainHeaderHeight + 10, width - 80, 24, 'D');
+  // Display a beautiful compact global synthesis box with 3D embossed shadow
+  drawEmbossedCard(doc, 40, mainHeaderHeight + 10, width - 80, 26, [79, 70, 229]);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.setTextColor(51, 65, 85);
-  doc.text(`SYNTHÈSE GLOBALE :   Total Heures : ${globalTotalHours.toFixed(2)}h   |   Heures Sup Totale : ${globalOvertimeHours.toFixed(2)}h   |   Banque Finale : ${finalOvertimeBank.toFixed(2)}h   |   Semaines Exportées : ${sortedWeeks.length}`, 50, mainHeaderHeight + 25);
+  doc.setTextColor(15, 23, 42); // slate-900 high contrast
+  doc.text(`SYNTHÈSE GLOBALE :`, 55, mainHeaderHeight + 26);
 
-  let currentY = mainHeaderHeight + 50;
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(51, 65, 85);
+  
+  const statStrSum = `Total Heures : ${globalTotalHours.toFixed(2)}h   |   Heures Sup Totales : ${globalOvertimeHours.toFixed(2)}h   |   Banque Finale : ${finalOvertimeBank.toFixed(2)}h   |   Semaines Exportées : ${sortedWeeks.length}`;
+  doc.text(statStrSum, 175, mainHeaderHeight + 26);
+
+  let currentY = mainHeaderHeight + 54;
 
   sortedWeeks.forEach((w) => {
     // Build grid data for this week
@@ -393,10 +489,9 @@ export const exportMultiWeekToPdf = (
 
     const sortedChantierKeys = Object.keys(chantiersSummary).sort();
     
-    // Estimate table height
+    // Estimate table height (estimated row count times height + margins)
     const numRows = sortedChantierKeys.length > 0 ? sortedChantierKeys.length : 1;
-    // Header row + data rows + foot row.
-    const estimatedHeight = 50 + (numRows * 18) + 20;
+    const estimatedHeight = 55 + (numRows * 22) + 22;
 
     // Page overflow check
     if (currentY + estimatedHeight > height - 30) {
@@ -404,20 +499,23 @@ export const exportMultiWeekToPdf = (
       currentY = 40; // start near top on manual page break (without repeating master header)
     }
 
-    // Draw the week section title
+    // Draw a compact card header block with soft shadow for the week title banner using the 3D draw function
+    drawEmbossedCard(doc, 40, currentY - 14, width - 80, 24, [124, 58, 237]);
+
+    // Draw localized info inside the container!
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(30, 41, 59); // deep slate
-    doc.text(`Semaine du ${w.data.meta.dateDebut} au ${w.data.meta.dateFin}`, 40, currentY);
+    doc.setFontSize(10);
+    doc.setTextColor(30, 41, 59); // slate-800
+    doc.text(`Semaine du ${w.data.meta.dateDebut} au ${w.data.meta.dateFin}`, 54, currentY + 1);
 
-    // Print summary stats next to the header on the right aligned
-    doc.setFont('helvetica', 'normal');
+    // Print summary stats aligned on the right inside our beautiful bar
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
-    doc.setTextColor(71, 85, 105);
-    const wStatsText = `Total Heures : ${w.summary.totalSemaine.toFixed(2)}h   |   Heures Supp : ${w.summary.heuresSupplementaires.toFixed(2)}h   |   Banque : ${w.overtimeBank.toFixed(2)}h`;
-    doc.text(wStatsText, width - 40, currentY, { align: 'right' });
+    doc.setTextColor(67, 56, 202); // indigo-700
+    const wStatsText = `Total Heures : ${w.summary.totalSemaine.toFixed(2)}h    |    Heures Supp : ${w.summary.heuresSupplementaires.toFixed(2)}h    |    Banque : ${w.overtimeBank.toFixed(2)}h`;
+    doc.text(wStatsText, width - 54, currentY + 1, { align: 'right' });
 
-    currentY += 8; // small gap before the table
+    currentY += 16; // Shift Y to space beautifully for the start of the table!
 
     if (sortedChantierKeys.length > 0) {
       const gridHead = [['Chantier', 'Type', ...JOURS_ABBR, 'TOTAL']];
@@ -443,26 +541,29 @@ export const exportMultiWeekToPdf = (
         theme: 'striped',
         styles: {
           font: 'helvetica',
-          fontSize: 8.5,
-          cellPadding: 6,
-          lineColor: [226, 232, 240], // slate-200
-          lineWidth: 0.5,
+          fontSize: 9, // Slightly larger for excellent readability
+          cellPadding: 7, // Spacious web-like vertical padding
+          lineColor: [203, 213, 225], // crisp slate-300 borders instead of light gray
+          lineWidth: 0.75, // more defined, clean lines
+          textColor: [15, 23, 42], // Deep high-contrast Slate-900 text for superior clarity
         },
         headStyles: { 
-          fillColor: [79, 70, 229], // brand indigo
+          fillColor: [79, 70, 229], // brand Indigo
           textColor: 255, 
           fontStyle: 'bold',
+          fontSize: 9.5,
           halign: 'center'
         },
         footStyles: { 
-          fillColor: [241, 245, 249], // soft gray footer
+          fillColor: [241, 245, 249], // soft slate-100 footer
           textColor: [15, 23, 42],    // Slate-900
           fontStyle: 'bold',
+          fontSize: 9.5,
           halign: 'center'
         },
         columnStyles: {
-          0: { fontStyle: 'bold', halign: 'left' },
-          1: { halign: 'left' },
+          0: { fontStyle: 'bold', halign: 'left', textColor: [15, 23, 42] },
+          1: { halign: 'left', textColor: [51, 65, 85] },
           2: { halign: 'center' },
           3: { halign: 'center' },
           4: { halign: 'center' },
@@ -473,29 +574,32 @@ export const exportMultiWeekToPdf = (
           9: { fontStyle: 'bold', halign: 'center' }
         },
         didParseCell: (e: any) => {
-          // Enforce horizontal centering for columns 2 through 9 across all sections (head/body/foot)
+          // Enforce center positioning for coordinates columns
           if (e.column.index >= 2 && e.column.index <= 9) {
             e.cell.styles.halign = 'center';
           }
 
           if (e.section === 'body') {
-            // Alternating row styling
+            // Alternating rows styling
             if (e.row.index % 2 === 0) {
               e.cell.styles.fillColor = [255, 255, 255];
             } else {
-              e.cell.styles.fillColor = [248, 250, 252]; // Soft slate-50 background like raw web pages
+              e.cell.styles.fillColor = [248, 250, 252]; // soft background
             }
 
             // Quiet/Mute empty dashes so active working entries stand out
             if (e.cell.raw === '-') {
-              e.cell.styles.textColor = [164, 174, 191]; // Slate-400 equivalent for softer look
+              e.cell.styles.textColor = [148, 163, 184]; // Slate-400
               e.cell.styles.fontStyle = 'normal';
+            } else if (e.column.index >= 2 && e.column.index <= 8) {
+              e.cell.styles.fontStyle = 'bold'; // Active hours bold for clarity
+              e.cell.styles.textColor = [15, 23, 42];
             }
 
             // Highlight total column
             if (e.column.index === 9) {
-              e.cell.styles.fillColor = [238, 242, 255]; // Soft Indigo tint (Indigo-50)
-              e.cell.styles.textColor = [67, 56, 202];   // Dark Indigo text
+              e.cell.styles.fillColor = [238, 242, 255]; // Soft Indigo-50
+              e.cell.styles.textColor = [67, 56, 202];   // Indigo-700
               e.cell.styles.fontStyle = 'bold';
             }
           } else if (e.section === 'foot') {
@@ -507,17 +611,44 @@ export const exportMultiWeekToPdf = (
               e.cell.styles.textColor = [67, 56, 202];   // Indigo-700
             }
           }
+        },
+        didDrawCell: (e: any) => {
+          // Gorgeous 3D embossed relief for the header cells in master tables
+          if (e.section === 'head') {
+            // Inner light bevel highlight at the top of headers
+            doc.setDrawColor(255, 255, 255, 0.45);
+            doc.setLineWidth(0.8);
+            doc.line(e.cell.x, e.cell.y + 0.8, e.cell.x + e.cell.width, e.cell.y + 0.8);
+            
+            // Solid physical drop line shadow at the bottom boundary of headers
+            doc.setDrawColor(30, 41, 59, 0.55);
+            doc.setLineWidth(1.2);
+            doc.line(e.cell.x, e.cell.y + e.cell.height - 0.6, e.cell.x + e.cell.width, e.cell.y + e.cell.height - 0.6);
+          } else if (e.section === 'foot') {
+            // Dual borders for footer cell separation relief
+            doc.setDrawColor(71, 85, 105, 0.35);
+            doc.setLineWidth(1.25);
+            doc.line(e.cell.x, e.cell.y, e.cell.x + e.cell.width, e.cell.y);
+            
+            doc.setDrawColor(255, 255, 255);
+            doc.setLineWidth(1.0);
+            doc.line(e.cell.x, e.cell.y + 1.2, e.cell.x + e.cell.width, e.cell.y + 1.2);
+          }
         }
       });
       
-      currentY = (doc as any).lastAutoTable.finalY + 25; // Update Y for the next block
+      currentY = (doc as any).lastAutoTable.finalY + 28; // Update Y for the next block
     } else {
-      // Empty week message
+      // Empty week message inside a beautifully bordered card
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(40, currentY, width - 80, 26, 4, 4, 'FD');
+      
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(9.5);
       doc.setTextColor(148, 163, 184);
-      doc.text("Aucun chantier ou activité enregistré pour cette semaine.", 40, currentY + 12);
-      currentY += 30;
+      doc.text("Aucun chantier ou activité enregistré pour cette semaine.", 54, currentY + 16);
+      currentY += 40;
     }
   });
 
