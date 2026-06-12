@@ -16,7 +16,7 @@ import {
   JOURS, JOURS_ABBR, CHANTIERS_INITIAUX, 
   STORAGE_KEY_PREFIX, STORAGE_KEY_LAST_VIEWED, 
   STORAGE_KEY_OVERTIME_BANK, STORAGE_KEY_OVERTIME_HISTORY,
-  STORAGE_KEY_PASSWORD_HASH 
+  STORAGE_KEY_PASSWORD_HASH, STORAGE_KEY_PASSWORD_HINT
 } from './data';
 import { 
   parseTimeToMinutes, calculateEntryMinutes, formatDateAsUTC, 
@@ -27,11 +27,11 @@ import {
 
 import { 
   ArchiveModal, ConfirmModal, ExportOptionsModal, 
-  CopyDayModal, OvertimeHistoryModal 
+  CopyDayModal, OvertimeHistoryModal, MultiWeekExportModal
 } from './components/Modales';
 import { SummaryGrid } from './components/SummaryGrid';
 import { PasswordLock, SecuritySettings } from './components/PasswordLock';
-import { exportToExcel, exportToPdf } from './exports';
+import { exportToExcel, exportToPdf, exportMultiWeekToPdf } from './exports';
 
 const createNewEntry = (): Entry => ({ 
   id: crypto.randomUUID(), 
@@ -69,6 +69,7 @@ export default function App() {
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [copyDayModalOpen, setCopyDayModalOpen] = useState(false);
+  const [isMultiWeekExportOpen, setIsMultiWeekExportOpen] = useState(false);
   const [exportOptions, setExportOptions] = useState<{ isOpen: boolean; type: 'pdf' | 'print' | null }>({
     isOpen: false,
     type: null
@@ -708,11 +709,16 @@ export default function App() {
     addToast(`Les chantiers du jour modèle [${modelDayName}] sont répliqués sur toute la semaine.`, 'success');
   };
 
-  const handleExportModeSelect = (scope: 'full' | 'summary') => {
+  const handleExportModeSelect = (scope: 'full' | 'summary' | 'multi') => {
     const { type } = exportOptions;
     setExportOptions({ isOpen: false, type: null });
     
     const timesheetData: TimesheetData = { meta, jours: dailyLogs, chantiers };
+
+    if (scope === 'multi') {
+      setIsMultiWeekExportOpen(true);
+      return;
+    }
 
     if (type === 'pdf') {
       exportToPdf(timesheetData, summary, overtimeBank, { summaryOnly: scope === 'summary' });
@@ -721,6 +727,103 @@ export default function App() {
       setPrintScope(scope);
       setIsPrinting(true);
     }
+  };
+
+  const handleExportMultiWeek = (startWeekDebut: string, endWeekDebut: string) => {
+    // 1. Gather all weeks from localStorage and active state
+    const loadedWeeksMap = new Map<string, any>();
+
+    // Scan localStorage
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key && 
+        key.startsWith(STORAGE_KEY_PREFIX) && 
+        key !== STORAGE_KEY_LAST_VIEWED && 
+        key !== STORAGE_KEY_OVERTIME_BANK && 
+        key !== STORAGE_KEY_OVERTIME_HISTORY &&
+        key !== STORAGE_KEY_PASSWORD_HASH &&
+        key !== STORAGE_KEY_PASSWORD_HINT &&
+        key !== 'timesheet_answer_hash'
+      ) {
+        const data = safeLocalStorageGet(key, null);
+        if (data && data.meta && data.meta.dateDebut) {
+          loadedWeeksMap.set(data.meta.dateDebut, data);
+        }
+      }
+    }
+
+    // Include/overwrite with current week (it has latest live state)
+    if (meta.dateDebut) {
+      loadedWeeksMap.set(meta.dateDebut, { meta, jours: dailyLogs, chantiers });
+    }
+
+    // Convert to array and filter inside the selected period
+    const startT = new Date(startWeekDebut).getTime();
+    const endT = new Date(endWeekDebut).getTime();
+
+    const filteredWeeks: any[] = [];
+
+    loadedWeeksMap.forEach((data, dateDebut) => {
+      const weekT = new Date(dateDebut).getTime();
+      if (weekT >= startT && weekT <= endT) {
+        // Calculate summary for this week
+        let totalWeekMin = 0;
+        let totalChantierMin = 0;
+        let totalBureauMin = 0;
+        const daysWorked = new Set<string>();
+        const filledChantiers = new Set<string>();
+
+        data.jours.forEach((day: any) => {
+          let totalDayMin = 0;
+          day.entries.forEach((entry: any) => {
+            const entryTotalMin = calculateEntryMinutes(entry);
+            totalDayMin += entryTotalMin;
+            if (entry.chantier) {
+              if (entry.type === 'Bureau') {
+                totalBureauMin += entryTotalMin;
+              } else {
+                totalChantierMin += entryTotalMin;
+              }
+              filledChantiers.add(entry.chantier);
+            }
+          });
+          if (totalDayMin > 0) {
+            daysWorked.add(day.jour);
+          }
+          totalWeekMin += totalDayMin;
+        });
+
+        const weeklyHours = totalWeekMin / 60;
+        const baseHours = data.meta.heuresSemaineNormales || 40;
+        const overtimeHours = Math.max(0, weeklyHours - baseHours);
+
+        const weekSummary = {
+          totalSemaine: weeklyHours,
+          totalChantier: totalChantierMin / 60,
+          totalBureau: totalBureauMin / 60,
+          joursTravailles: daysWorked.size,
+          nbChantiers: filledChantiers.size,
+          heuresSupplementaires: overtimeHours
+        };
+
+        filteredWeeks.push({
+          data,
+          summary: weekSummary,
+          overtimeBank: overtimeBank
+        });
+      }
+    });
+
+    if (filteredWeeks.length === 0) {
+      addToast("Aucune donnée de feuille de temps trouvée pour cette période.", "error");
+      return;
+    }
+
+    // Call PDF generator
+    exportMultiWeekToPdf(meta.nom || "KENNICHE Lahouari", filteredWeeks);
+    setIsMultiWeekExportOpen(false);
+    addToast("Rapport multi-semaines généré avec succès.", "success");
   };
 
   const triggerLogout = () => {
@@ -801,6 +904,12 @@ export default function App() {
         type={exportOptions.type} 
         onClose={() => setExportOptions({ isOpen: false, type: null })} 
         onConfirm={handleExportModeSelect} 
+      />
+      <MultiWeekExportModal 
+        isOpen={isMultiWeekExportOpen}
+        onClose={() => setIsMultiWeekExportOpen(false)}
+        currentWeeksData={{ meta, jours: dailyLogs, chantiers, summary, overtimeBank }}
+        onExport={handleExportMultiWeek}
       />
       <CopyDayModal 
         isOpen={copyDayModalOpen} 

@@ -236,7 +236,7 @@ interface ExportOptionsModalProps {
   isOpen: boolean;
   type: 'pdf' | 'print' | null;
   onClose: () => void;
-  onConfirm: (scope: 'full' | 'summary') => void;
+  onConfirm: (scope: 'full' | 'summary' | 'multi') => void;
 }
 
 export const ExportOptionsModal: React.FC<ExportOptionsModalProps> = ({
@@ -264,7 +264,7 @@ export const ExportOptionsModal: React.FC<ExportOptionsModalProps> = ({
           
           <button 
             onClick={() => onConfirm('full')}
-            className="w-full text-left p-4 bg-slate-50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 rounded-xl transition group duration-200"
+            className="w-full text-left p-4 bg-slate-50 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-200 rounded-xl transition group duration-200"
           >
             <span className="block font-bold text-slate-800 group-hover:text-indigo-800 text-sm">📋 Rapport Complet</span>
             <span className="block text-xs text-slate-400 group-hover:text-indigo-600 mt-1">Génère la grille journalière détaillée ainsi que la récapitulation globale et sa banque d'heures.</span>
@@ -277,6 +277,16 @@ export const ExportOptionsModal: React.FC<ExportOptionsModalProps> = ({
             <span className="block font-bold text-slate-800 group-hover:text-amber-800 text-sm">📊 Résumé Hebdomadaire uniquement</span>
             <span className="block text-xs text-slate-400 group-hover:text-amber-600 mt-1">Génère uniquement le tableau de synthèse des chantiers (idéal pour la paie et la consultation rapide).</span>
           </button>
+
+          {isPDF && (
+            <button 
+              onClick={() => onConfirm('multi')}
+              className="w-full text-left p-4 bg-slate-50 hover:bg-emerald-50 border border-slate-100 hover:border-emerald-200 rounded-xl transition group duration-200"
+            >
+              <span className="block font-bold text-slate-800 group-hover:text-emerald-800 text-sm">🗓️ Rapport Multi-Semaines (Période)</span>
+              <span className="block text-xs text-slate-400 group-hover:text-emerald-600 mt-1">Choisissez une période de plusieurs semaines archivées pour générer un grand rapport PDF regroupé.</span>
+            </button>
+          )}
         </div>
         <footer className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
           <button 
@@ -469,6 +479,221 @@ export const OvertimeHistoryModal: React.FC<OvertimeHistoryModalProps> = ({
 
 interface CalendarCodeProps {
   className?: string;
+}
+
+export const MultiWeekExportModal: React.FC<MultiWeekExportModalProps> = ({
+  isOpen,
+  onClose,
+  currentWeeksData,
+  onExport
+}) => {
+  const [weeksList, setWeeksList] = useState<any[]>([]);
+  const [startWeek, setStartWeek] = useState('');
+  const [endWeek, setEndWeek] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    // 1. Gather all weeks from localStorage and also active state
+    const loaded: any[] = [];
+    const datesAdded = new Set<string>();
+
+    // Add current week
+    if (currentWeeksData && currentWeeksData.meta && currentWeeksData.meta.dateDebut) {
+      loaded.push({
+        key: 'current',
+        dateDebut: currentWeeksData.meta.dateDebut,
+        dateFin: currentWeeksData.meta.dateFin,
+        nom: currentWeeksData.meta.nom,
+        totalHours: currentWeeksData.summary?.totalSemaine || 0
+      });
+      datesAdded.add(currentWeeksData.meta.dateDebut);
+    }
+
+    // Scan localStorage
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key && 
+        key.startsWith(STORAGE_KEY_PREFIX) && 
+        key !== STORAGE_KEY_LAST_VIEWED && 
+        key !== STORAGE_KEY_OVERTIME_BANK && 
+        key !== STORAGE_KEY_OVERTIME_HISTORY &&
+        key !== STORAGE_KEY_PASSWORD_HASH &&
+        key !== STORAGE_KEY_PASSWORD_HINT &&
+        key !== 'timesheet_answer_hash'
+      ) {
+        const data = safeLocalStorageGet(key, null);
+        if (data && data.meta && data.meta.dateDebut) {
+          if (!datesAdded.has(data.meta.dateDebut)) {
+            // Find total hours
+            let totalMinutes = 0;
+            if (data.jours && Array.isArray(data.jours)) {
+              data.jours.forEach((day: any) => {
+                if (day.entries && Array.isArray(day.entries)) {
+                  day.entries.forEach((entry: any) => {
+                    totalMinutes += calculateEntryMinutes(entry);
+                  });
+                }
+              });
+            }
+            loaded.push({
+              key,
+              dateDebut: data.meta.dateDebut,
+              dateFin: data.meta.dateFin,
+              nom: data.meta.nom,
+              totalHours: totalMinutes / 60
+            });
+            datesAdded.add(data.meta.dateDebut);
+          }
+        }
+      }
+    }
+
+    // Sort chronologically ascending (older weeks first) for easier selection
+    loaded.sort((a, b) => new Date(a.dateDebut).getTime() - new Date(b.dateDebut).getTime());
+    setWeeksList(loaded);
+
+    // Default select start & end
+    if (loaded.length > 0) {
+      setStartWeek(loaded[0].dateDebut);
+      setEndWeek(loaded[loaded.length - 1].dateDebut);
+    }
+  }, [isOpen, currentWeeksData]);
+
+  // Handle select changes and auto-correct/validate
+  useEffect(() => {
+    if (!startWeek || !endWeek) return;
+    const startT = new Date(startWeek).getTime();
+    const endT = new Date(endWeek).getTime();
+    if (startT > endT) {
+      setError("La date de début de la période doit être antérieure ou égale à la date de fin.");
+    } else {
+      setError('');
+    }
+  }, [startWeek, endWeek]);
+
+  if (!isOpen) return null;
+
+  const handleGenerate = () => {
+    if (error) return;
+    onExport(startWeek, endWeek);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={e => e.stopPropagation()}>
+        <header className="p-5 border-b border-slate-100 flex justify-between items-center bg-indigo-50/20">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">📅</span>
+            <h2 className="text-md font-bold text-slate-800">Export Multi-Semaines (Période)</h2>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </header>
+        
+        <div className="p-6 space-y-5">
+          <p className="text-sm text-slate-500">
+            Sélectionnez une période de plusieurs semaines pour regrouper leurs résumés analytiques de chantiers dans un unique rapport PDF.
+          </p>
+
+          {weeksList.length < 2 && (
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-700 leading-relaxed font-semibold">
+              ⚠️ Pour exporter sur plusieurs semaines, vous devez avoir enregistré des archives de semaines précédentes (bouton "Archives" pour voir vos semaines enregistrées).
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">Semaine de Début :</label>
+              <select
+                value={startWeek}
+                onChange={e => setStartWeek(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              >
+                {weeksList.map(week => (
+                  <option key={week.dateDebut} value={week.dateDebut}>
+                    Du {week.dateDebut} ({week.totalHours.toFixed(1)}h)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">Semaine de Fin :</label>
+              <select
+                value={endWeek}
+                onChange={e => setEndWeek(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              >
+                {weeksList.map(week => (
+                  <option key={week.dateDebut} value={week.dateDebut}>
+                    Au {week.dateFin} ({week.totalHours.toFixed(1)}h)
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-red-50 rounded-xl border border-red-150 text-xs text-red-600 font-semibold flex items-start gap-1.5">
+              <span>⚠️</span>
+              <span>{error}</span>
+            </div>
+          )}
+
+          {!error && startWeek && endWeek && (
+            <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-1.5 text-xs text-slate-600">
+              <div className="flex justify-between font-semibold text-slate-700">
+                <span>Période sélectionnée :</span>
+                <span className="text-indigo-600">Du {startWeek} au {weeksList.find(w => w.dateDebut === endWeek)?.dateFin}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Semaines incluses :</span>
+                <span className="font-bold text-slate-800">
+                  {weeksList.filter(w => {
+                    const t = new Date(w.dateDebut).getTime();
+                    return t >= new Date(startWeek).getTime() && t <= new Date(endWeek).getTime();
+                  }).length} semaine(s)
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <footer className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2.5">
+          <button 
+            onClick={onClose} 
+            className="px-4 py-2 text-sm font-semibold bg-slate-200 hover:bg-slate-300 text-slate-805 rounded-xl transition"
+          >
+            Annuler
+          </button>
+          <button 
+            onClick={handleGenerate}
+            disabled={!!error || !startWeek || !endWeek}
+            className="px-4 py-2 text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-40 disabled:cursor-not-allowed rounded-xl shadow-md transition"
+          >
+            Générer le PDF 📥
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+};
+
+interface MultiWeekExportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  currentWeeksData: {
+    meta: any;
+    jours: any[];
+    chantiers: string[];
+    summary: any;
+    overtimeBank: number;
+  };
+  onExport: (startWeekDebut: string, endWeekDebut: string) => void;
 }
 
 const CalendarCode: React.FC<CalendarCodeProps> = ({ className }) => (
