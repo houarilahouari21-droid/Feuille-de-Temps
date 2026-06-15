@@ -26,9 +26,16 @@ export const PasswordLock: React.FC<PasswordLockProps> = ({ onUnlock, onSetToast
   const [securityAnswer, setSecurityAnswer] = useState('');
   const [showAnswer, setShowAnswer] = useState(false);
   
-  const savedHash = localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
-  const securityQuestion = localStorage.getItem(STORAGE_KEY_PASSWORD_HINT) || '';
-  const savedAnswerHash = localStorage.getItem(STORAGE_KEY_ANSWER_HASH) || '';
+  let savedHash: string | null = null;
+  let securityQuestion = '';
+  let savedAnswerHash = '';
+  try {
+    savedHash = localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+    securityQuestion = localStorage.getItem(STORAGE_KEY_PASSWORD_HINT) || '';
+    savedAnswerHash = localStorage.getItem(STORAGE_KEY_ANSWER_HASH) || '';
+  } catch (e) {
+    console.error("Failed to read security configurations from localStorage:", e);
+  }
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,13 +217,27 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
   const [activeTab, setActiveTab] = useState<'status' | 'change'>('status');
   
   // Password state
-  const [enabled, setEnabled] = useState(!!localStorage.getItem(STORAGE_KEY_PASSWORD_HASH));
+  const [enabled, setEnabled] = useState<boolean>(() => {
+    try {
+      return !!localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  });
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
   // Security question state
-  const [question, setQuestion] = useState(localStorage.getItem(STORAGE_KEY_PASSWORD_HINT) || '');
+  const [question, setQuestion] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_PASSWORD_HINT) || '';
+    } catch (e) {
+      console.error(e);
+      return '';
+    }
+  });
   const [answer, setAnswer] = useState('');
   
   const [showPass, setShowPass] = useState(false);
@@ -228,7 +249,12 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
     setError('');
     setSuccess('');
 
-    const savedHash = localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+    let savedHash: string | null = null;
+    try {
+      savedHash = localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+    } catch (e) {
+      console.error(e);
+    }
 
     // If enabling first time, or disabling
     if (!savedHash) {
@@ -251,9 +277,13 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
       }
 
       // Save!
-      localStorage.setItem(STORAGE_KEY_PASSWORD_HASH, hashPassword(newPassword));
-      localStorage.setItem(STORAGE_KEY_PASSWORD_HINT, question.trim());
-      localStorage.setItem(STORAGE_KEY_ANSWER_HASH, hashPassword(answer.trim().toLowerCase()));
+      try {
+        localStorage.setItem(STORAGE_KEY_PASSWORD_HASH, hashPassword(newPassword));
+        localStorage.setItem(STORAGE_KEY_PASSWORD_HINT, question.trim());
+        localStorage.setItem(STORAGE_KEY_ANSWER_HASH, hashPassword(answer.trim().toLowerCase()));
+      } catch (e) {
+        console.error("Failed to write password hash to localStorage:", e);
+      }
       
       setEnabled(true);
       setSuccess('Protection par mot de passe activée avec succès !');
@@ -275,9 +305,13 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
 
       if (!enabled) {
         // Disabling security
-        localStorage.removeItem(STORAGE_KEY_PASSWORD_HASH);
-        localStorage.removeItem(STORAGE_KEY_PASSWORD_HINT);
-        localStorage.removeItem(STORAGE_KEY_ANSWER_HASH);
+        try {
+          localStorage.removeItem(STORAGE_KEY_PASSWORD_HASH);
+          localStorage.removeItem(STORAGE_KEY_PASSWORD_HINT);
+          localStorage.removeItem(STORAGE_KEY_ANSWER_HASH);
+        } catch (e) {
+          console.error("Failed to delete password configuration:", e);
+        }
         setEnabled(false);
         setSuccess('Protection par mot de passe désactivée.');
         setCurrentPassword('');
@@ -286,20 +320,28 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
         // Updating password/security question
         if (newPassword) {
           if (newPassword.length < 4) {
-            setError('Le nouveau mot de passe doit faire au moins 4 caractères.');
-            return;
+             setError('Le nouveau mot de passe doit faire au moins 4 caractères.');
+             return;
           }
           if (newPassword !== confirmPassword) {
             setError('La confirmation ne correspond pas au nouveau mot de passe.');
             return;
           }
-          localStorage.setItem(STORAGE_KEY_PASSWORD_HASH, hashPassword(newPassword));
+          try {
+            localStorage.setItem(STORAGE_KEY_PASSWORD_HASH, hashPassword(newPassword));
+          } catch (e) {
+            console.error(e);
+          }
         }
 
         if (question) {
-          localStorage.setItem(STORAGE_KEY_PASSWORD_HINT, question.trim());
-          if (answer) {
-            localStorage.setItem(STORAGE_KEY_ANSWER_HASH, hashPassword(answer.trim().toLowerCase()));
+          try {
+            localStorage.setItem(STORAGE_KEY_PASSWORD_HINT, question.trim());
+            if (answer) {
+              localStorage.setItem(STORAGE_KEY_ANSWER_HASH, hashPassword(answer.trim().toLowerCase()));
+            }
+          } catch (e) {
+            console.error(e);
           }
         }
 
@@ -313,7 +355,12 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
     }
   };
 
-  const isConfigured = !!localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+  let isConfigured = false;
+  try {
+    isConfigured = !!localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+  } catch (e) {
+    console.error(e);
+  }
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">

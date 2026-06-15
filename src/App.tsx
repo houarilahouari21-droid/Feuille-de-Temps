@@ -22,7 +22,7 @@ import {
   parseTimeToMinutes, calculateEntryMinutes, formatDateAsUTC, 
   getSundayOfGivenDate, safeFixed, minutesToHours, 
   safeLocalStorageGet, safeLocalStorageSet, safeLocalStorageRemove,
-  getWeekKey, encodeB64Unicode, decodeB64Unicode 
+  getWeekKey, generateUUID, encodeB64Unicode, decodeB64Unicode 
 } from './utils';
 
 import { 
@@ -34,7 +34,7 @@ import { PasswordLock, SecuritySettings } from './components/PasswordLock';
 import { exportToExcel, exportToPdf, exportMultiWeekToPdf } from './exports';
 
 const createNewEntry = (): Entry => ({ 
-  id: crypto.randomUUID(), 
+  id: generateUUID(), 
   chantier: '', 
   type: 'Chantier', 
   debut: '', 
@@ -106,7 +106,7 @@ export default function App() {
 
   // --- NOTIFICATION TOAST HANDLER ---
   const addToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
@@ -202,7 +202,7 @@ export default function App() {
       ...day,
       entries: (day.entries || [createNewEntry()]).map(entry => ({
         ...entry,
-        id: entry.id || crypto.randomUUID(),
+        id: entry.id || generateUUID(),
         type: entry.type || 'Chantier'
       }))
     }));
@@ -716,7 +716,7 @@ export default function App() {
           ...day,
           entries: day.entries.map(e => ({
             ...e,
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             debut: '',
             fin: '',
             pause: 0,
@@ -756,7 +756,7 @@ export default function App() {
       if (day.jour === modelDayName) return day;
       const copies = source.entries.map(e => ({
         ...e,
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         debut: '',
         fin: '',
         pause: 0

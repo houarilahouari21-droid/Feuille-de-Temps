@@ -141,6 +141,21 @@ export const safeLocalStorageRemove = (key: string): boolean => {
 
 export const getWeekKey = (date: string): string => `${STORAGE_KEY_PREFIX}${date}`;
 
+export const generateUUID = (): string => {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch (e) {
+    // Ignore and fallback
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export const encodeB64Unicode = (str: string): string => {
   return btoa(unescape(encodeURIComponent(str)));
 };

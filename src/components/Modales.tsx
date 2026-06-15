@@ -39,34 +39,38 @@ export const ArchiveModal: React.FC<ArchiveModalProps> = ({
     const allWeeks: any[] = [];
     
     // Scan all keys looking for timesheets
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (
-        key && 
-        key.startsWith(STORAGE_KEY_PREFIX) && 
-        key !== STORAGE_KEY_LAST_VIEWED && 
-        key !== STORAGE_KEY_OVERTIME_BANK && 
-        key !== STORAGE_KEY_OVERTIME_HISTORY &&
-        key !== STORAGE_KEY_PASSWORD_HASH &&
-        key !== STORAGE_KEY_PASSWORD_HINT &&
-        key !== 'timesheet_answer_hash'
-      ) {
-        const data = safeLocalStorageGet(key, null);
-        if (data && data.meta && data.meta.dateDebut) {
-          let totalMinutes = 0;
-          if (data.jours && Array.isArray(data.jours)) {
-            data.jours.forEach((day: any) => {
-              if (day.entries && Array.isArray(day.entries)) {
-                day.entries.forEach((entry: any) => {
-                  totalMinutes += calculateEntryMinutes(entry);
-                });
-              }
-            });
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (
+          key && 
+          key.startsWith(STORAGE_KEY_PREFIX) && 
+          key !== STORAGE_KEY_LAST_VIEWED && 
+          key !== STORAGE_KEY_OVERTIME_BANK && 
+          key !== STORAGE_KEY_OVERTIME_HISTORY &&
+          key !== STORAGE_KEY_PASSWORD_HASH &&
+          key !== STORAGE_KEY_PASSWORD_HINT &&
+          key !== 'timesheet_answer_hash'
+        ) {
+          const data = safeLocalStorageGet(key, null);
+          if (data && data.meta && data.meta.dateDebut) {
+            let totalMinutes = 0;
+            if (data.jours && Array.isArray(data.jours)) {
+              data.jours.forEach((day: any) => {
+                if (day.entries && Array.isArray(day.entries)) {
+                  day.entries.forEach((entry: any) => {
+                    totalMinutes += calculateEntryMinutes(entry);
+                  });
+                }
+              });
+            }
+            data.totalHours = (totalMinutes / 60).toFixed(2);
+            allWeeks.push(data);
           }
-          data.totalHours = (totalMinutes / 60).toFixed(2);
-          allWeeks.push(data);
         }
       }
+    } catch (e) {
+      console.error("Failed to scan localStorage for archives:", e);
     }
     
     // Sort chronological descending
@@ -512,43 +516,47 @@ export const MultiWeekExportModal: React.FC<MultiWeekExportModalProps> = ({
     }
 
     // Scan localStorage
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (
-        key && 
-        key.startsWith(STORAGE_KEY_PREFIX) && 
-        key !== STORAGE_KEY_LAST_VIEWED && 
-        key !== STORAGE_KEY_OVERTIME_BANK && 
-        key !== STORAGE_KEY_OVERTIME_HISTORY &&
-        key !== STORAGE_KEY_PASSWORD_HASH &&
-        key !== STORAGE_KEY_PASSWORD_HINT &&
-        key !== 'timesheet_answer_hash'
-      ) {
-        const data = safeLocalStorageGet(key, null);
-        if (data && data.meta && data.meta.dateDebut) {
-          if (!datesAdded.has(data.meta.dateDebut)) {
-            // Find total hours
-            let totalMinutes = 0;
-            if (data.jours && Array.isArray(data.jours)) {
-              data.jours.forEach((day: any) => {
-                if (day.entries && Array.isArray(day.entries)) {
-                  day.entries.forEach((entry: any) => {
-                    totalMinutes += calculateEntryMinutes(entry);
-                  });
-                }
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (
+          key && 
+          key.startsWith(STORAGE_KEY_PREFIX) && 
+          key !== STORAGE_KEY_LAST_VIEWED && 
+          key !== STORAGE_KEY_OVERTIME_BANK && 
+          key !== STORAGE_KEY_OVERTIME_HISTORY &&
+          key !== STORAGE_KEY_PASSWORD_HASH &&
+          key !== STORAGE_KEY_PASSWORD_HINT &&
+          key !== 'timesheet_answer_hash'
+        ) {
+          const data = safeLocalStorageGet(key, null);
+          if (data && data.meta && data.meta.dateDebut) {
+            if (!datesAdded.has(data.meta.dateDebut)) {
+              // Find total hours
+              let totalMinutes = 0;
+              if (data.jours && Array.isArray(data.jours)) {
+                data.jours.forEach((day: any) => {
+                  if (day.entries && Array.isArray(day.entries)) {
+                    day.entries.forEach((entry: any) => {
+                      totalMinutes += calculateEntryMinutes(entry);
+                    });
+                  }
+                });
+              }
+              loaded.push({
+                key,
+                dateDebut: data.meta.dateDebut,
+                dateFin: data.meta.dateFin,
+                nom: data.meta.nom,
+                totalHours: totalMinutes / 60
               });
+              datesAdded.add(data.meta.dateDebut);
             }
-            loaded.push({
-              key,
-              dateDebut: data.meta.dateDebut,
-              dateFin: data.meta.dateFin,
-              nom: data.meta.nom,
-              totalHours: totalMinutes / 60
-            });
-            datesAdded.add(data.meta.dateDebut);
           }
         }
       }
+    } catch (e) {
+      console.error("Failed to scan localStorage for multi-export:", e);
     }
 
     // Sort chronologically ascending (older weeks first) for easier selection
