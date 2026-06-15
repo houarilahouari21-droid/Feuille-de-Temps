@@ -45,8 +45,12 @@ const createNewEntry = (): Entry => ({
 
 export default function App() {
   const [isLocked, setIsLocked] = useState<boolean>(() => {
-    // Check if security password has been configured
-    return !!localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+    try {
+      return !!localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+    } catch (e) {
+      console.error("Failed to read lock state:", e);
+      return false;
+    }
   });
   
   const [showSecuritySettings, setShowSecuritySettings] = useState(false);
@@ -210,12 +214,16 @@ export default function App() {
   }, []);
 
   const loadBlankWeek = useCallback((sundayDate: Date) => {
-    const saturday = new Date(sundayDate.getTime());
-    saturday.setUTCDate(sundayDate.getUTCDate() + 6);
+    let safeSunday = sundayDate;
+    if (!safeSunday || isNaN(safeSunday.getTime())) {
+      safeSunday = getSundayOfGivenDate(new Date());
+    }
+    const saturday = new Date(safeSunday.getTime());
+    saturday.setUTCDate(safeSunday.getUTCDate() + 6);
     
     setMeta({
       nom: meta.nom || 'KENNICHE Lahouari',
-      dateDebut: formatDateAsUTC(sundayDate),
+      dateDebut: formatDateAsUTC(safeSunday),
       dateFin: formatDateAsUTC(saturday),
       heuresSemaineNormales: meta.heuresSemaineNormales || 40
     });
@@ -225,13 +233,19 @@ export default function App() {
   }, [meta.nom, meta.heuresSemaineNormales]);
 
   const loadWeekData = useCallback((sundayStr: string) => {
-    const weekKey = getWeekKey(sundayStr);
+    let cleanStr = sundayStr;
+    const isBadString = !cleanStr || cleanStr === 'undefined' || cleanStr === 'null' || isNaN(Date.parse(cleanStr));
+    if (isBadString) {
+      cleanStr = formatDateAsUTC(getSundayOfGivenDate(new Date()));
+      localStorage.setItem(STORAGE_KEY_LAST_VIEWED, cleanStr);
+    }
+    const weekKey = getWeekKey(cleanStr);
     const saved = safeLocalStorageGet<TimesheetData | null>(weekKey, null);
     if (saved) {
       _loadDataIntoState(saved);
-      addToast(`Données de la semaine du ${sundayStr} chargées.`, 'info');
+      addToast(`Données de la semaine du ${cleanStr} chargées.`, 'info');
     } else {
-      loadBlankWeek(new Date(`${sundayStr}T12:00:00.000Z`));
+      loadBlankWeek(new Date(`${cleanStr}T12:00:00.000Z`));
     }
   }, [_loadDataIntoState, loadBlankWeek, addToast]);
 
@@ -291,8 +305,12 @@ export default function App() {
   // --- INITIALIZE & EMBEDDED DATACARD LOADER ---
   useEffect(() => {
     // Initialize banks
-    const savedBank = localStorage.getItem(STORAGE_KEY_OVERTIME_BANK);
-    if (savedBank) setOvertimeBank(parseFloat(savedBank) || 0);
+    try {
+      const savedBank = localStorage.getItem(STORAGE_KEY_OVERTIME_BANK);
+      if (savedBank) setOvertimeBank(parseFloat(savedBank) || 0);
+    } catch (e) {
+      console.error("Failed to read overtime bank:", e);
+    }
 
     const savedHistory = safeLocalStorageGet<HistoryItem[]>(STORAGE_KEY_OVERTIME_HISTORY, []);
     setOvertimeHistory(savedHistory);
@@ -311,7 +329,12 @@ export default function App() {
         console.error("Failed to parse embedded content :", err);
       }
     } else {
-      const lastViewed = localStorage.getItem(STORAGE_KEY_LAST_VIEWED);
+      let lastViewed = null;
+      try {
+        lastViewed = localStorage.getItem(STORAGE_KEY_LAST_VIEWED);
+      } catch (e) {
+        console.error("Failed to read last viewed week:", e);
+      }
       const currentSun = formatDateAsUTC(getSundayOfGivenDate(new Date()));
       loadWeekData(lastViewed || currentSun);
     }
@@ -319,7 +342,11 @@ export default function App() {
 
   // Sync banks triggers
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_OVERTIME_BANK, overtimeBank.toString());
+    try {
+      localStorage.setItem(STORAGE_KEY_OVERTIME_BANK, overtimeBank.toString());
+    } catch (e) {
+      console.error("Failed to save overtime bank:", e);
+    }
   }, [overtimeBank]);
 
   useEffect(() => {

@@ -44,16 +44,39 @@ export const calculateEntryMinutes = (
 };
 
 export const formatDateAsUTC = (date: Date): string => {
-  const year = date.getUTCFullYear();
-  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-  const day = date.getUTCDate().toString().padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  try {
+    if (!date || isNaN(date.getTime())) {
+      date = new Date();
+    }
+    const year = date.getUTCFullYear();
+    const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+    const day = date.getUTCDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch (e) {
+    console.error("formatDateAsUTC error, falling back to today:", e);
+    const fallback = new Date();
+    const year = fallback.getUTCFullYear();
+    const month = (fallback.getUTCMonth() + 1).toString().padStart(2, '0');
+    const day = fallback.getUTCDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
 };
 
 export const getSundayOfGivenDate = (date: Date): Date => {
-  const dt = new Date(date.getTime());
+  let safeDate = date;
+  if (!safeDate || isNaN(safeDate.getTime())) {
+    safeDate = new Date();
+  }
+  const dt = new Date(safeDate.getTime());
   dt.setUTCHours(12, 0, 0, 0);
   const day = dt.getUTCDay();
+  if (isNaN(day)) {
+    const d = new Date();
+    const currentDay = d.getUTCDay();
+    d.setUTCDate(d.getUTCDate() - currentDay);
+    d.setUTCHours(12, 0, 0, 0);
+    return d;
+  }
   const diff = day; // 0 Sunday, 1 Monday, etc.
   dt.setUTCDate(dt.getUTCDate() - diff);
   return dt;
