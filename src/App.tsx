@@ -145,7 +145,7 @@ export default function App() {
     return {
       summary: {
         totalSemaine: weeklyHours,
-        totalChantier: totalChantierMin / 65, // Convert nicely
+        totalChantier: totalChantierMin / 60, // Convert nicely
         totalBureau: totalBureauMin / 60,
         joursTravailles: daysWorked.size,
         nbChantiers: filledChantiers.size,
@@ -351,46 +351,78 @@ export default function App() {
 
   // --- ACTIONS & HANDLERS ---
   const updateEntry = (dayIndex: number, entryId: string, field: keyof Entry, value: any) => {
-    const newLogs = [...dailyLogs];
-    const item = newLogs[dayIndex].entries.find(e => e.id === entryId);
-    if (item) {
-      (item as any)[field] = value;
-      setDailyLogs(newLogs);
-    }
+    setDailyLogs(prev => prev.map((day, dIdx) => {
+      if (dIdx !== dayIndex) return day;
+      return {
+        ...day,
+        entries: day.entries.map(e => {
+          if (e.id !== entryId) return e;
+          return { ...e, [field]: value };
+        })
+      };
+    }));
   };
 
+  const updateEntryMultiple = useCallback((dayIndex: number, entryId: string, updates: Partial<Entry>) => {
+    setDailyLogs(prev => prev.map((day, dIdx) => {
+      if (dIdx !== dayIndex) return day;
+      return {
+        ...day,
+        entries: day.entries.map(e => {
+          if (e.id !== entryId) return e;
+          return { ...e, ...updates };
+        })
+      };
+    }));
+  }, []);
+
   const addRowForDay = (dayIndex: number) => {
-    const newLogs = [...dailyLogs];
-    newLogs[dayIndex].entries.push(createNewEntry());
-    setDailyLogs(newLogs);
+    setDailyLogs(prev => prev.map((day, idx) => {
+      if (idx !== dayIndex) return day;
+      return {
+        ...day,
+        entries: [...day.entries, createNewEntry()]
+      };
+    }));
   };
 
   const removeRowForDay = (dayIndex: number, entryId: string) => {
-    const newLogs = [...dailyLogs];
-    if (newLogs[dayIndex].entries.length > 1) {
-      newLogs[dayIndex].entries = newLogs[dayIndex].entries.filter(e => e.id !== entryId);
-      setDailyLogs(newLogs);
-    } else {
-      addToast("Chaque journée doit posséder au moins une ligne.", 'info');
-    }
+    setDailyLogs(prev => {
+      const targetDay = prev[dayIndex];
+      if (targetDay.entries.length > 1) {
+        return prev.map((day, idx) => {
+          if (idx !== dayIndex) return day;
+          return {
+            ...day,
+            entries: day.entries.filter(e => e.id !== entryId)
+          };
+        });
+      } else {
+        addToast("Chaque journée doit posséder au moins une ligne.", 'info');
+        return prev;
+      }
+    });
   };
 
   const handleNewChantier = (dayIndex: number, entryId: string) => {
     const label = prompt("Saisissez l'identifiant du nouveau chantier :");
     if (label && label.trim()) {
       const clean = label.trim();
+      const isBureau = clean.toLowerCase().includes('bureau');
+      const updates: Partial<Entry> = {
+        chantier: clean,
+        type: isBureau ? 'Bureau' : 'Chantier'
+      };
+
       if (!chantiers.includes(clean)) {
         setChantiers(prev => [...prev, clean].sort((a, b) => a.localeCompare(b)));
-        updateEntry(dayIndex, entryId, 'chantier', clean);
+        updateEntryMultiple(dayIndex, entryId, updates);
         addToast(`Nouveau chantier '${clean}' répertorié.`, 'success');
       } else {
-        updateEntry(dayIndex, entryId, 'chantier', clean);
-      }
-      if (clean.toLowerCase().includes('bureau')) {
-        updateEntry(dayIndex, entryId, 'type', 'Bureau');
+        updateEntryMultiple(dayIndex, entryId, updates);
       }
     } else {
-      updateEntry(dayIndex, entryId, 'chantier', '');
+      updateEntryMultiple(dayIndex, entryId, { chantier: '' });
     }
   };
 
