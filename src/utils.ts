@@ -108,33 +108,81 @@ export const formatDateTime = (date: Date): string => {
   return new Intl.DateTimeFormat('fr-CA', options).format(date);
 };
 
+// Safe in-memory storage fallback for sandboxed/restricted browser situations
+const createMemoryStorage = () => {
+  const store: Record<string, string> = {};
+  return {
+    getItem: (key: string): string | null => {
+      return store[key] !== undefined ? store[key] : null;
+    },
+    setItem: (key: string, value: string): void => {
+      store[key] = value;
+    },
+    removeItem: (key: string): void => {
+      delete store[key];
+    },
+    clear: (): void => {
+      for (const k in store) {
+        delete store[k];
+      }
+    },
+    key: (index: number): string | null => {
+      const keys = Object.keys(store);
+      return keys[index] !== undefined ? keys[index] : null;
+    },
+    get length(): number {
+      return Object.keys(store).length;
+    }
+  };
+};
+
+let safeStorageTemp: {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+  key(index: number): string | null;
+  length: number;
+} = createMemoryStorage();
+
+try {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.setItem('__test_ls_active__', '1');
+    window.localStorage.removeItem('__test_ls_active__');
+    safeStorageTemp = window.localStorage;
+  }
+} catch (e) {
+  console.warn("Storage exception detected (possibly sandboxed frame/cookies disabled). Falling back to safe in-memory storage.", e);
+}
+
+export const safeStorage = safeStorageTemp;
+
 // Safe localStorage helpers with error resilience
 export const safeLocalStorageGet = <T>(key: string, defaultValue: T): T => {
   try {
-    const item = localStorage.getItem(key);
+    const item = safeStorage.getItem(key);
     return item ? JSON.parse(item) : defaultValue;
   } catch (e) {
-    console.error(`Error reading from localStorage key "${key}":`, e);
+    console.error(`Error reading from safeStorage key "${key}":`, e);
     return defaultValue;
   }
 };
 
 export const safeLocalStorageSet = <T>(key: string, value: T): boolean => {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    safeStorage.setItem(key, JSON.stringify(value));
     return true;
   } catch (e) {
-    console.error(`Error writing to localStorage key "${key}":`, e);
+    console.error(`Error writing to safeStorage key "${key}":`, e);
     return false;
   }
 };
 
 export const safeLocalStorageRemove = (key: string): boolean => {
   try {
-    localStorage.removeItem(key);
+    safeStorage.removeItem(key);
     return true;
   } catch (e) {
-    console.error(`Error removing localStorage key "${key}":`, e);
+    console.error(`Error removing safeStorage key "${key}":`, e);
     return false;
   }
 };

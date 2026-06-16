@@ -22,7 +22,8 @@ import {
   parseTimeToMinutes, calculateEntryMinutes, formatDateAsUTC, 
   getSundayOfGivenDate, safeFixed, minutesToHours, 
   safeLocalStorageGet, safeLocalStorageSet, safeLocalStorageRemove,
-  getWeekKey, generateUUID, encodeB64Unicode, decodeB64Unicode 
+  getWeekKey, generateUUID, encodeB64Unicode, decodeB64Unicode,
+  safeStorage
 } from './utils';
 
 import { 
@@ -46,7 +47,7 @@ const createNewEntry = (): Entry => ({
 export default function App() {
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     try {
-      return !!localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+      return !!safeStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
     } catch (e) {
       console.error("Failed to read lock state:", e);
       return false;
@@ -237,7 +238,11 @@ export default function App() {
     const isBadString = !cleanStr || cleanStr === 'undefined' || cleanStr === 'null' || isNaN(Date.parse(cleanStr));
     if (isBadString) {
       cleanStr = formatDateAsUTC(getSundayOfGivenDate(new Date()));
-      localStorage.setItem(STORAGE_KEY_LAST_VIEWED, cleanStr);
+      try {
+        safeStorage.setItem(STORAGE_KEY_LAST_VIEWED, cleanStr);
+      } catch (e) {
+        console.error(e);
+      }
     }
     const weekKey = getWeekKey(cleanStr);
     const saved = safeLocalStorageGet<TimesheetData | null>(weekKey, null);
@@ -306,7 +311,7 @@ export default function App() {
   useEffect(() => {
     // Initialize banks
     try {
-      const savedBank = localStorage.getItem(STORAGE_KEY_OVERTIME_BANK);
+      const savedBank = safeStorage.getItem(STORAGE_KEY_OVERTIME_BANK);
       if (savedBank) setOvertimeBank(parseFloat(savedBank) || 0);
     } catch (e) {
       console.error("Failed to read overtime bank:", e);
@@ -331,7 +336,7 @@ export default function App() {
     } else {
       let lastViewed = null;
       try {
-        lastViewed = localStorage.getItem(STORAGE_KEY_LAST_VIEWED);
+        lastViewed = safeStorage.getItem(STORAGE_KEY_LAST_VIEWED);
       } catch (e) {
         console.error("Failed to read last viewed week:", e);
       }
@@ -343,7 +348,7 @@ export default function App() {
   // Sync banks triggers
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_OVERTIME_BANK, overtimeBank.toString());
+      safeStorage.setItem(STORAGE_KEY_OVERTIME_BANK, overtimeBank.toString());
     } catch (e) {
       console.error("Failed to save overtime bank:", e);
     }
@@ -459,13 +464,21 @@ export default function App() {
     const date = new Date(`${meta.dateDebut}T12:00:00.000Z`);
     date.setUTCDate(date.getUTCDate() + (offset * 7));
     const sundayStr = formatDateAsUTC(getSundayOfGivenDate(date));
-    localStorage.setItem(STORAGE_KEY_LAST_VIEWED, sundayStr);
+    try {
+      safeStorage.setItem(STORAGE_KEY_LAST_VIEWED, sundayStr);
+    } catch (e) {
+      console.error(e);
+    }
     loadWeekData(sundayStr);
   };
 
   const jumpToTodayWeek = () => {
     const currentSun = formatDateAsUTC(getSundayOfGivenDate(new Date()));
-    localStorage.setItem(STORAGE_KEY_LAST_VIEWED, currentSun);
+    try {
+      safeStorage.setItem(STORAGE_KEY_LAST_VIEWED, currentSun);
+    } catch (e) {
+      console.error(e);
+    }
     loadWeekData(currentSun);
   };
 
@@ -565,7 +578,11 @@ export default function App() {
         if (payload.overtimeBank !== undefined) {
           const val = parseFloat(payload.overtimeBank) || 0;
           setOvertimeBank(val);
-          localStorage.setItem(STORAGE_KEY_OVERTIME_BANK, val.toString());
+          try {
+            safeStorage.setItem(STORAGE_KEY_OVERTIME_BANK, val.toString());
+          } catch (e) {
+            console.error(e);
+          }
         }
 
         if (payload.overtimeHistory) {
@@ -573,7 +590,11 @@ export default function App() {
         }
 
         if (payload.lastViewed) {
-          localStorage.setItem(STORAGE_KEY_LAST_VIEWED, payload.lastViewed);
+          try {
+            safeStorage.setItem(STORAGE_KEY_LAST_VIEWED, payload.lastViewed);
+          } catch (e) {
+            console.error(e);
+          }
           loadWeekData(payload.lastViewed);
         }
 
@@ -587,29 +608,39 @@ export default function App() {
   };
 
   const handleJSONBackupExport = () => {
+    let lastViewedVal = null;
+    try {
+      lastViewedVal = safeStorage.getItem(STORAGE_KEY_LAST_VIEWED);
+    } catch (e) {
+      console.error(e);
+    }
     const fullBackup: Record<string, any> = {
       exportDate: new Date().toISOString(),
       overtimeBank,
       overtimeHistory,
-      lastViewed: localStorage.getItem(STORAGE_KEY_LAST_VIEWED),
+      lastViewed: lastViewedVal,
       weeks: {}
     };
 
     // Pull everything in LocalStorage
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (
-        key && 
-        key.startsWith(STORAGE_KEY_PREFIX) && 
-        key !== STORAGE_KEY_LAST_VIEWED && 
-        key !== STORAGE_KEY_OVERTIME_BANK && 
-        key !== STORAGE_KEY_OVERTIME_HISTORY &&
-        key !== STORAGE_KEY_PASSWORD_HASH &&
-        key !== 'timesheet_password_hint' &&
-        key !== 'timesheet_answer_hash'
-      ) {
-        fullBackup.weeks[key] = safeLocalStorageGet(key, null);
+    try {
+      for (let i = 0; i < safeStorage.length; i++) {
+        const key = safeStorage.key(i);
+        if (
+          key && 
+          key.startsWith(STORAGE_KEY_PREFIX) && 
+          key !== STORAGE_KEY_LAST_VIEWED && 
+          key !== STORAGE_KEY_OVERTIME_BANK && 
+          key !== STORAGE_KEY_OVERTIME_HISTORY &&
+          key !== STORAGE_KEY_PASSWORD_HASH &&
+          key !== 'timesheet_password_hint' &&
+          key !== 'timesheet_answer_hash'
+        ) {
+          fullBackup.weeks[key] = safeLocalStorageGet(key, null);
+        }
       }
+    } catch (e) {
+      console.error(e);
     }
 
     const payload = JSON.stringify(fullBackup, null, 2);
@@ -727,7 +758,11 @@ export default function App() {
       };
       
       safeLocalStorageSet(nextKey, duplicatedData);
-      localStorage.setItem(STORAGE_KEY_LAST_VIEWED, nextSundayStr);
+      try {
+        safeStorage.setItem(STORAGE_KEY_LAST_VIEWED, nextSundayStr);
+      } catch (e) {
+        console.error(e);
+      }
       loadWeekData(nextSundayStr);
       addToast(`Semaine configurée vers le ${nextSundayStr} avec la même liste de chantiers !`, 'success');
     };
@@ -792,24 +827,28 @@ export default function App() {
     // 1. Gather all weeks from localStorage and active state
     const loadedWeeksMap = new Map<string, any>();
 
-    // Scan localStorage
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (
-        key && 
-        key.startsWith(STORAGE_KEY_PREFIX) && 
-        key !== STORAGE_KEY_LAST_VIEWED && 
-        key !== STORAGE_KEY_OVERTIME_BANK && 
-        key !== STORAGE_KEY_OVERTIME_HISTORY &&
-        key !== STORAGE_KEY_PASSWORD_HASH &&
-        key !== STORAGE_KEY_PASSWORD_HINT &&
-        key !== 'timesheet_answer_hash'
-      ) {
-        const data = safeLocalStorageGet(key, null);
-        if (data && data.meta && data.meta.dateDebut) {
-          loadedWeeksMap.set(data.meta.dateDebut, data);
+    // Scan safeStorage
+    try {
+      for (let i = 0; i < safeStorage.length; i++) {
+        const key = safeStorage.key(i);
+        if (
+          key && 
+          key.startsWith(STORAGE_KEY_PREFIX) && 
+          key !== STORAGE_KEY_LAST_VIEWED && 
+          key !== STORAGE_KEY_OVERTIME_BANK && 
+          key !== STORAGE_KEY_OVERTIME_HISTORY && 
+          key !== STORAGE_KEY_PASSWORD_HASH && 
+          key !== STORAGE_KEY_PASSWORD_HINT && 
+          key !== 'timesheet_answer_hash'
+        ) {
+          const data = safeLocalStorageGet(key, null);
+          if (data && data.meta && data.meta.dateDebut) {
+            loadedWeeksMap.set(data.meta.dateDebut, data);
+          }
         }
       }
+    } catch (e) {
+      console.error(e);
     }
 
     // Include/overwrite with current week (it has latest live state)
@@ -908,7 +947,11 @@ export default function App() {
   // Archive Loader Trigger
   const handleArchiveWeekLoad = (weekData: any) => {
     loadDataObject(weekData);
-    localStorage.setItem(STORAGE_KEY_LAST_VIEWED, weekData.meta.dateDebut);
+    try {
+      safeStorage.setItem(STORAGE_KEY_LAST_VIEWED, weekData.meta.dateDebut);
+    } catch (e) {
+      console.error(e);
+    }
     addToast(`Données d'archive chargées pour la semaine du ${weekData.meta.dateDebut}.`, 'info');
     setIsArchiveOpen(false);
   };
@@ -1010,7 +1053,7 @@ export default function App() {
                 <Settings className="w-4 h-4" />
                 <span>Sécurité</span>
               </button>
-              {localStorage.getItem(STORAGE_KEY_PASSWORD_HASH) && (
+              {safeStorage.getItem(STORAGE_KEY_PASSWORD_HASH) && (
                 <button 
                   onClick={triggerLogout}
                   className="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition"

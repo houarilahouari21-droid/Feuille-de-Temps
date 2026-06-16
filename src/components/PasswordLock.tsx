@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Lock, Unlock, Eye, EyeOff, Shield, KeyRound, CheckCircle2, AlertCircle } from 'lucide-react';
-import { hashPassword } from '../utils';
+import { hashPassword, safeStorage } from '../utils';
 import { STORAGE_KEY_PASSWORD_HASH, STORAGE_KEY_PASSWORD_HINT } from '../data';
 
 // Storage key for the security answer hash
@@ -30,9 +30,9 @@ export const PasswordLock: React.FC<PasswordLockProps> = ({ onUnlock, onSetToast
   let securityQuestion = '';
   let savedAnswerHash = '';
   try {
-    savedHash = localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
-    securityQuestion = localStorage.getItem(STORAGE_KEY_PASSWORD_HINT) || '';
-    savedAnswerHash = localStorage.getItem(STORAGE_KEY_ANSWER_HASH) || '';
+    savedHash = safeStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+    securityQuestion = safeStorage.getItem(STORAGE_KEY_PASSWORD_HINT) || '';
+    savedAnswerHash = safeStorage.getItem(STORAGE_KEY_ANSWER_HASH) || '';
   } catch (e) {
     console.error("Failed to read security configurations from localStorage:", e);
   }
@@ -219,7 +219,7 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
   // Password state
   const [enabled, setEnabled] = useState<boolean>(() => {
     try {
-      return !!localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+      return !!safeStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
     } catch (e) {
       console.error(e);
       return false;
@@ -232,7 +232,7 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
   // Security question state
   const [question, setQuestion] = useState<string>(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY_PASSWORD_HINT) || '';
+      return safeStorage.getItem(STORAGE_KEY_PASSWORD_HINT) || '';
     } catch (e) {
       console.error(e);
       return '';
@@ -251,7 +251,7 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
 
     let savedHash: string | null = null;
     try {
-      savedHash = localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+      savedHash = safeStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
     } catch (e) {
       console.error(e);
     }
@@ -278,11 +278,11 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
 
       // Save!
       try {
-        localStorage.setItem(STORAGE_KEY_PASSWORD_HASH, hashPassword(newPassword));
-        localStorage.setItem(STORAGE_KEY_PASSWORD_HINT, question.trim());
-        localStorage.setItem(STORAGE_KEY_ANSWER_HASH, hashPassword(answer.trim().toLowerCase()));
+        safeStorage.setItem(STORAGE_KEY_PASSWORD_HASH, hashPassword(newPassword));
+        safeStorage.setItem(STORAGE_KEY_PASSWORD_HINT, question.trim());
+        safeStorage.setItem(STORAGE_KEY_ANSWER_HASH, hashPassword(answer.trim().toLowerCase()));
       } catch (e) {
-        console.error("Failed to write password hash to localStorage:", e);
+        console.error("Failed to write password hash to safeStorage:", e);
       }
       
       setEnabled(true);
@@ -306,9 +306,9 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
       if (!enabled) {
         // Disabling security
         try {
-          localStorage.removeItem(STORAGE_KEY_PASSWORD_HASH);
-          localStorage.removeItem(STORAGE_KEY_PASSWORD_HINT);
-          localStorage.removeItem(STORAGE_KEY_ANSWER_HASH);
+          safeStorage.removeItem(STORAGE_KEY_PASSWORD_HASH);
+          safeStorage.removeItem(STORAGE_KEY_PASSWORD_HINT);
+          safeStorage.removeItem(STORAGE_KEY_ANSWER_HASH);
         } catch (e) {
           console.error("Failed to delete password configuration:", e);
         }
@@ -328,7 +328,7 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
             return;
           }
           try {
-            localStorage.setItem(STORAGE_KEY_PASSWORD_HASH, hashPassword(newPassword));
+            safeStorage.setItem(STORAGE_KEY_PASSWORD_HASH, hashPassword(newPassword));
           } catch (e) {
             console.error(e);
           }
@@ -336,9 +336,9 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
 
         if (question) {
           try {
-            localStorage.setItem(STORAGE_KEY_PASSWORD_HINT, question.trim());
+            safeStorage.setItem(STORAGE_KEY_PASSWORD_HINT, question.trim());
             if (answer) {
-              localStorage.setItem(STORAGE_KEY_ANSWER_HASH, hashPassword(answer.trim().toLowerCase()));
+              safeStorage.setItem(STORAGE_KEY_ANSWER_HASH, hashPassword(answer.trim().toLowerCase()));
             }
           } catch (e) {
             console.error(e);
@@ -357,7 +357,7 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({ onClose, onS
 
   let isConfigured = false;
   try {
-    isConfigured = !!localStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
+    isConfigured = !!safeStorage.getItem(STORAGE_KEY_PASSWORD_HASH);
   } catch (e) {
     console.error(e);
   }

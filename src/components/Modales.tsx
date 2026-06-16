@@ -16,7 +16,7 @@ import {
 } from '../data';
 import { 
   safeLocalStorageGet, calculateEntryMinutes, 
-  safeFixed, formatDateTime 
+  safeFixed, formatDateTime, safeStorage
 } from '../utils';
 
 // ================= ARCHIVE MODAL =================
@@ -40,8 +40,8 @@ export const ArchiveModal: React.FC<ArchiveModalProps> = ({
     
     // Scan all keys looking for timesheets
     try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      for (let i = 0; i < safeStorage.length; i++) {
+        const key = safeStorage.key(i);
         if (
           key && 
           key.startsWith(STORAGE_KEY_PREFIX) && 
@@ -517,8 +517,8 @@ export const MultiWeekExportModal: React.FC<MultiWeekExportModalProps> = ({
 
     // Scan localStorage
     try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      for (let i = 0; i < safeStorage.length; i++) {
+        const key = safeStorage.key(i);
         if (
           key && 
           key.startsWith(STORAGE_KEY_PREFIX) && 
