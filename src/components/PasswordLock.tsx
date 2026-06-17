@@ -80,10 +80,12 @@ export const PasswordLock: React.FC<PasswordLockProps> = ({ onUnlock, onSetToast
           <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-4 rounded-full shadow-lg shadow-indigo-500/20 mb-4 animate-pulse">
             <Lock className="w-8 h-8 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-white text-center">Feuille de Temps Sécurisée</h2>
-          <p className="text-slate-400 text-sm text-center mt-1">
-            {showForgot ? 'Récupération de l’accès' : 'Le projet est protégé par un mot de passe.'}
-          </p>
+          <h2 className="text-2xl font-bold text-white text-center">Feuille de Temps</h2>
+          {showForgot && (
+            <p className="text-slate-400 text-sm text-center mt-1">
+              Récupération de l’accès
+            </p>
+          )}
         </div>
 
         {error && (
@@ -197,11 +199,6 @@ export const PasswordLock: React.FC<PasswordLockProps> = ({ onUnlock, onSetToast
             </div>
           </form>
         )}
-
-        <div className="mt-8 pt-6 border-t border-slate-700/60 flex items-center justify-center gap-2 text-xs text-slate-500">
-          <Shield className="w-4 h-4 text-slate-500" />
-          <span>Données sécurisées localement sur votre navigateur.</span>
-        </div>
       </div>
     </div>
   );
