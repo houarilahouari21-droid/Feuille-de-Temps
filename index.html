@@ -18,6 +18,67 @@
           console.warn("Fetch polyfill-patch failed:", e);
         }
       })();
+      
+      // Global diagnostic error reporter to reveal what's making the page blank
+      window.addEventListener('error', function(e) {
+        var errDiv = document.getElementById('debug-error-overlay');
+        if (!errDiv) {
+          errDiv = document.createElement('div');
+          errDiv.id = 'debug-error-overlay';
+          errDiv.style.position = 'fixed';
+          errDiv.style.top = '0';
+          errDiv.style.left = '0';
+          errDiv.style.width = '100vw';
+          errDiv.style.height = '100vh';
+          errDiv.style.backgroundColor = '#7f1d1d';
+          errDiv.style.color = '#fef2f2';
+          errDiv.style.padding = '24px';
+          errDiv.style.zIndex = '999999';
+          errDiv.style.fontFamily = 'monospace';
+          errDiv.style.overflow = 'auto';
+          document.body.appendChild(errDiv);
+        }
+        var msg = e.message || 'Unknown runtime error';
+        var file = e.filename || 'Unknown file';
+        var line = e.lineno || '?';
+        var col = e.colno || '?';
+        var stack = (e.error && e.error.stack) || 'No stack trace available';
+        
+        errDiv.innerHTML = '<h2 style="font-size: 20px; font-weight: bold; margin-bottom: 12px; color: #fecaca;">Runtime Error Caught:</h2>' +
+          '<div style="background-color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 12px;">' +
+          '<strong>Message:</strong> ' + msg + '<br/>' +
+          '<strong>Source:</strong> ' + file + ' (Ligne ' + line + ', Col ' + col + ')' +
+          '</div>' +
+          '<pre style="white-space: pre-wrap; font-size: 13px; line-height: 1.5; background: #450a0a; padding: 12px; border-radius: 8px;">' + stack + '</pre>';
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        var errDiv = document.getElementById('debug-error-overlay');
+        if (!errDiv) {
+          errDiv = document.createElement('div');
+          errDiv.id = 'debug-error-overlay';
+          errDiv.style.position = 'fixed';
+          errDiv.style.top = '0';
+          errDiv.style.left = '0';
+          errDiv.style.width = '100vw';
+          errDiv.style.height = '100vh';
+          errDiv.style.backgroundColor = '#581c87';
+          errDiv.style.color = '#faf5ff';
+          errDiv.style.padding = '24px';
+          errDiv.style.zIndex = '999999';
+          errDiv.style.fontFamily = 'monospace';
+          errDiv.style.overflow = 'auto';
+          document.body.appendChild(errDiv);
+        }
+        var reason = e.reason || 'Unknown promise rejection';
+        var msg = reason.message || reason;
+        var stack = reason.stack || 'No stack trace available';
+        
+        errDiv.innerHTML = '<h2 style="font-size: 20px; font-weight: bold; margin-bottom: 12px; color: #f3e8ff;">Unhandled Promise Rejection:</h2>' +
+          '<div style="background-color: #6b21a8; padding: 12px; border-radius: 8px; margin-bottom: 12px;">' +
+          '<strong>Reason:</strong> ' + msg +
+          '</div>' +
+          '<pre style="white-space: pre-wrap; font-size: 13px; line-height: 1.5; background: #3b0764; padding: 12px; border-radius: 8px;">' + stack + '</pre>';
+      });
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
