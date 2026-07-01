@@ -63,11 +63,13 @@ export default function App() {
   });
   const [dailyLogs, setDailyLogs] = useState<DayLog[]>([]);
   const [customChantiers, setCustomChantiers] = useState<string[]>(() => {
-    return safeLocalStorageGet<string[]>('timesheet_custom_chantiers', []);
+    const stored = safeLocalStorageGet<any>('timesheet_custom_chantiers', []);
+    return Array.isArray(stored) ? stored : [];
   });
 
   const chantiers = useMemo(() => {
-    const combined = Array.from(new Set([...CHANTIERS_INITIAUX, ...customChantiers]));
+    const list = Array.isArray(customChantiers) ? customChantiers : [];
+    const combined = Array.from(new Set([...CHANTIERS_INITIAUX, ...list]));
     return combined.sort((a, b) => a.localeCompare(b));
   }, [customChantiers]);
 
@@ -75,10 +77,11 @@ export default function App() {
     if (!name || !name.trim()) return;
     const clean = name.trim();
     setCustomChantiers(prev => {
-      if (prev.includes(clean) || CHANTIERS_INITIAUX.includes(clean)) {
-        return prev;
+      const prevList = Array.isArray(prev) ? prev : [];
+      if (prevList.includes(clean) || CHANTIERS_INITIAUX.includes(clean)) {
+        return prevList;
       }
-      const updated = [...prev, clean].sort((a, b) => a.localeCompare(b));
+      const updated = [...prevList, clean].sort((a, b) => a.localeCompare(b));
       safeLocalStorageSet('timesheet_custom_chantiers', updated);
       return updated;
     });
@@ -230,10 +233,11 @@ export default function App() {
     
     // Merge any loaded chantiers into customChantiers if they are not in the initial list
     if (data.chantiers && data.chantiers.length > 0) {
-      const newCustoms = data.chantiers.filter(c => c && !CHANTIERS_INITIAUX.includes(c));
+      const newCustoms = data.chantiers.filter((c: any) => c && typeof c === 'string' && !CHANTIERS_INITIAUX.includes(c));
       if (newCustoms.length > 0) {
         setCustomChantiers(prev => {
-          const merged = Array.from(new Set([...prev, ...newCustoms]));
+          const prevList = Array.isArray(prev) ? prev : [];
+          const merged = Array.from(new Set([...prevList, ...newCustoms]));
           const sorted = merged.sort((a, b) => a.localeCompare(b));
           safeLocalStorageSet('timesheet_custom_chantiers', sorted);
           return sorted;
@@ -604,8 +608,8 @@ export default function App() {
           });
           
           // Sync custom chantiers to state if restored
-          const restoredCustoms = safeLocalStorageGet<string[]>('timesheet_custom_chantiers', []);
-          setCustomChantiers(restoredCustoms);
+          const restoredCustoms = safeLocalStorageGet<any>('timesheet_custom_chantiers', []);
+          setCustomChantiers(Array.isArray(restoredCustoms) ? restoredCustoms : []);
         }
 
         if (payload.overtimeBank !== undefined) {
