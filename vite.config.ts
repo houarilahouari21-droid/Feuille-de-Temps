@@ -5,7 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(({ command }) => {
   return {
-    base: command === 'serve' ? '/' : './',
+    base: process.env.GITHUB_ACTIONS ? '/Feuille-de-Temps/' : (command === 'serve' ? '/' : './'),
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

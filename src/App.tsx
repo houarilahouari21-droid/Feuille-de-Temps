@@ -62,9 +62,27 @@ export default function App() {
     heuresSemaineNormales: 40 
   });
   const [dailyLogs, setDailyLogs] = useState<DayLog[]>([]);
-  const [chantiers, setChantiers] = useState<string[]>(() => {
-    return CHANTIERS_INITIAUX;
+  const [customChantiers, setCustomChantiers] = useState<string[]>(() => {
+    return safeLocalStorageGet<string[]>('timesheet_custom_chantiers', []);
   });
+
+  const chantiers = useMemo(() => {
+    const combined = Array.from(new Set([...CHANTIERS_INITIAUX, ...customChantiers]));
+    return combined.sort((a, b) => a.localeCompare(b));
+  }, [customChantiers]);
+
+  const registerNewChantier = useCallback((name: string) => {
+    if (!name || !name.trim()) return;
+    const clean = name.trim();
+    setCustomChantiers(prev => {
+      if (prev.includes(clean) || CHANTIERS_INITIAUX.includes(clean)) {
+        return prev;
+      }
+      const updated = [...prev, clean].sort((a, b) => a.localeCompare(b));
+      safeLocalStorageSet('timesheet_custom_chantiers', updated);
+      return updated;
+    });
+  }, []);
   const [overtimeBank, setOvertimeBank] = useState<number>(0);
   const [overtimeHistory, setOvertimeHistory] = useState<HistoryItem[]>([]);
   const [hasBankedThisWeek, setHasBankedThisWeek] = useState<boolean>(false);
@@ -209,10 +227,22 @@ export default function App() {
     }));
 
     setDailyLogs(migratedLogs);
-    const loadedChantiers = (data.chantiers && data.chantiers.length > 0) ? data.chantiers : CHANTIERS_INITIAUX;
-    setChantiers([...loadedChantiers].sort((a, b) => a.localeCompare(b)));
+    
+    // Merge any loaded chantiers into customChantiers if they are not in the initial list
+    if (data.chantiers && data.chantiers.length > 0) {
+      const newCustoms = data.chantiers.filter(c => c && !CHANTIERS_INITIAUX.includes(c));
+      if (newCustoms.length > 0) {
+        setCustomChantiers(prev => {
+          const merged = Array.from(new Set([...prev, ...newCustoms]));
+          const sorted = merged.sort((a, b) => a.localeCompare(b));
+          safeLocalStorageSet('timesheet_custom_chantiers', sorted);
+          return sorted;
+        });
+      }
+    }
+
     setHasBankedThisWeek(false);
-  }, []);
+  }, [setCustomChantiers]);
 
   const loadBlankWeek = useCallback((sundayDate: Date) => {
     let safeSunday = sundayDate;
@@ -229,7 +259,6 @@ export default function App() {
       heuresSemaineNormales: meta.heuresSemaineNormales || 40
     });
     setDailyLogs(JOURS.map(jour => ({ jour, entries: [createNewEntry()] })));
-    setChantiers(CHANTIERS_INITIAUX);
     setHasBankedThisWeek(false);
   }, [meta.nom, meta.heuresSemaineNormales]);
 
@@ -447,7 +476,7 @@ export default function App() {
       };
 
       if (!chantiers.includes(clean)) {
-        setChantiers(prev => [...prev, clean].sort((a, b) => a.localeCompare(b)));
+        registerNewChantier(clean);
         updateEntryMultiple(dayIndex, entryId, updates);
         addToast(`Nouveau chantier '${clean}' répertorié.`, 'success');
       } else {
@@ -573,6 +602,10 @@ export default function App() {
           Object.entries(payload.weeks).forEach(([key, value]) => {
             safeLocalStorageSet(key, value);
           });
+          
+          // Sync custom chantiers to state if restored
+          const restoredCustoms = safeLocalStorageGet<string[]>('timesheet_custom_chantiers', []);
+          setCustomChantiers(restoredCustoms);
         }
 
         if (payload.overtimeBank !== undefined) {
